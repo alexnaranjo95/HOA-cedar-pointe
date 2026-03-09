@@ -20,6 +20,8 @@ export interface Property {
   latitude: number | null;
   longitude: number | null;
   geocoded_at: string | null;
+  ownership_type: 'LLC_OWNED' | 'OWNER_OCCUPIED' | 'UNKNOWN';
+  occupancy_type: 'SECTION_8' | 'RENTER' | 'HOMEOWNER_OCCUPIED' | 'UNKNOWN';
   status: 'verified' | 'needs_review' | 'incomplete';
   created_at: string;
   updated_at: string;

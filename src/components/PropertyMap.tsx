@@ -15,6 +15,9 @@ const STATUS_COLORS = {
   incomplete: { fill: '#94a3b8', stroke: '#64748b' },
   clubhouse: { fill: '#9ca3af', stroke: '#6b7280' },
   selected: { stroke: '#f59e0b', weight: 3 },
+  section8: { fill: '#ef4444', stroke: '#b91c1c' },
+  renter: { fill: '#f97316', stroke: '#c2410c' },
+  homeowner: { fill: '#22c55e', stroke: '#15803d' },
 };
 
 function isClubhouse(address: string): boolean {
@@ -52,6 +55,11 @@ function ringsToLatLngs(rings: number[][][]): L.LatLngExpression[][] {
 
 function getParcelColors(property: PropertyWithOwner) {
   if (isClubhouse(property.address)) return STATUS_COLORS.clubhouse;
+
+  if (property.occupancy_type === 'SECTION_8') return STATUS_COLORS.section8;
+  if (property.occupancy_type === 'RENTER') return STATUS_COLORS.renter;
+  if (property.occupancy_type === 'HOMEOWNER_OCCUPIED') return STATUS_COLORS.homeowner;
+
   const hasOwner = property.homeowners && property.homeowners.length > 0;
   const isVerified = property.status === 'verified';
 
@@ -64,10 +72,15 @@ function buildTooltipContent(property: PropertyWithOwner): string {
   const houseNum = property.address.match(/^(\d+)/)?.[1] || '';
   const ownerName = property.homeowners?.[0]?.owner_name;
 
+  let typeLabel = '';
+  if (property.ownership_type === 'LLC_OWNED') typeLabel = 'LLC Owned';
+  else if (property.ownership_type === 'OWNER_OCCUPIED') typeLabel = 'Owner Occupied';
+
   return `<div style="font-size:12px;line-height:1.4">
     <strong>${houseNum}</strong><br/>
     <span style="color:#e2e8f0;font-size:11px">${property.address.split(',')[0]}</span>
     ${ownerName ? `<br/><span style="color:#93c5fd;font-size:11px">${ownerName}</span>` : ''}
+    ${typeLabel ? `<br/><span style="color:#cbd5e1;font-size:10px;font-weight:bold">${typeLabel}</span>` : ''}
   </div>`;
 }
 
@@ -211,19 +224,26 @@ export default function PropertyMap({ properties, selectedPropertyId, onProperty
     <div className="relative w-full h-full rounded-lg overflow-hidden border border-slate-700 shadow-lg">
       <div ref={mapContainerRef} className="w-full h-full" />
       <div className="absolute bottom-3 left-3 bg-slate-900/85 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm z-[1000]">
-        <div className="flex items-center gap-3 text-xs text-slate-200">
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded-sm bg-[#22c55e]"></span> Verified
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded-sm bg-[#3b82f6]"></span> Owner
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded-sm bg-[#94a3b8]"></span> Incomplete
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded-sm bg-[#9ca3af]"></span> Clubhouse
-          </span>
+        <div className="flex flex-col gap-1.5 text-xs text-slate-200">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-2 rounded-sm bg-[#ef4444]"></span> Section 8
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-2 rounded-sm bg-[#f97316]"></span> Renter
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-2 rounded-sm bg-[#22c55e]"></span> Homeowner / Verified
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-2 rounded-sm bg-[#3b82f6]"></span> Unverified Owner
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-2 rounded-sm bg-[#94a3b8]"></span> Incomplete
+            </span>
+          </div>
         </div>
       </div>
     </div>

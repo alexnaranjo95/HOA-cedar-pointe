@@ -25,6 +25,8 @@ export default function PropertyDetail({ property, onClose, onUpdate }: Property
     owner_type: 'unknown' as 'owner_occupied' | 'rental' | 'investment' | 'unknown'
   });
 
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
+
   const currentOwner = property.homeowners?.[0];
 
   useEffect(() => {
@@ -94,14 +96,31 @@ export default function PropertyDetail({ property, onClose, onUpdate }: Property
     }
   };
 
+  const handleCategoryChange = async (field: 'ownership_type' | 'occupancy_type', value: string) => {
+    setIsUpdatingCategory(true);
+    try {
+      await updateProperty(property.id, { [field]: value });
+      onUpdate();
+    } catch (error) {
+      console.error(`Error updating ${field}:`, error);
+      alert('Failed to update property category.');
+    } finally {
+      setIsUpdatingCategory(false);
+    }
+  };
+
   const skipStatus = currentOwner?.skip_trace_status;
+
+  // Validation warning logic
+  const isConflict =
+    property.ownership_type === 'OWNER_OCCUPIED' &&
+    (property.occupancy_type === 'RENTER' || property.occupancy_type === 'SECTION_8');
 
   return (
     <>
       <div className="h-full flex flex-col bg-white border-l border-slate-200">
-        <div className={`text-white px-5 py-4 flex items-start justify-between flex-shrink-0 ${
-          property.address.toLowerCase().includes('clubhouse') ? 'bg-purple-700' : 'bg-slate-800'
-        }`}>
+        <div className={`text-white px-5 py-4 flex items-start justify-between flex-shrink-0 ${property.address.toLowerCase().includes('clubhouse') ? 'bg-purple-700' : 'bg-slate-800'
+          }`}>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-bold truncate">
               {property.address.toLowerCase().includes('clubhouse') ? (
@@ -119,11 +138,10 @@ export default function PropertyDetail({ property, onClose, onUpdate }: Property
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-              property.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
-              property.status === 'needs_review' ? 'bg-amber-100 text-amber-700' :
-              'bg-slate-100 text-slate-600'
-            }`}>
+            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${property.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                property.status === 'needs_review' ? 'bg-amber-100 text-amber-700' :
+                  'bg-slate-100 text-slate-600'
+              }`}>
               {property.status.replace('_', ' ').toUpperCase()}
             </span>
             {skipStatus === 'completed' && (
@@ -140,6 +158,57 @@ export default function PropertyDetail({ property, onClose, onUpdate }: Property
               <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700">
                 <AlertCircle size={12} /> Failed
               </span>
+            )}
+          </div>
+
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-sm relative">
+            {isUpdatingCategory && (
+              <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-lg z-10">
+                <span className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                  <Clock size={12} className="animate-spin" /> Updating...
+                </span>
+              </div>
+            )}
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Property Categorization</h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1" title="How the property is owned">
+                  Ownership Type
+                </label>
+                <select
+                  value={property.ownership_type || 'UNKNOWN'}
+                  onChange={(e) => handleCategoryChange('ownership_type', e.target.value)}
+                  className="w-full text-sm py-1.5 px-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-400 bg-white"
+                >
+                  <option value="UNKNOWN">Unknown</option>
+                  <option value="OWNER_OCCUPIED">Owner Occupied</option>
+                  <option value="LLC_OWNED">LLC Owned</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1" title="Who resides in the property">
+                  Occupancy Type
+                </label>
+                <select
+                  value={property.occupancy_type || 'UNKNOWN'}
+                  onChange={(e) => handleCategoryChange('occupancy_type', e.target.value)}
+                  className="w-full text-sm py-1.5 px-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-400 bg-white"
+                >
+                  <option value="UNKNOWN">Unknown</option>
+                  <option value="HOMEOWNER_OCCUPIED">Homeowner Occupied</option>
+                  <option value="RENTER">Renter (Standard)</option>
+                  <option value="SECTION_8">Section 8 (Gov Subsidized)</option>
+                </select>
+              </div>
+            </div>
+
+            {isConflict && (
+              <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs flex items-start gap-1.5 text-amber-800">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-amber-500" />
+                <p><strong>Warning:</strong> "Owner Occupied" ownership conflicts with a rental occupancy type. Please verify.</p>
+              </div>
             )}
           </div>
 
