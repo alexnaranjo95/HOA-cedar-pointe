@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, MapPin, Search, CheckCircle, AlertCircle, Clock, Save, Trash2 } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, Search, CheckCircle, AlertCircle, Clock, Save } from 'lucide-react';
 import { PropertyWithOwner, SkipTraceContact } from '../lib/supabase';
-import { createHomeowner, updateHomeowner, deleteHomeowner, updateProperty } from '../services/propertyService';
+import { createHomeowner, updateHomeowner, updateProperty } from '../services/propertyService';
 import { performSkipTrace, getSkipTraceContacts } from '../services/skipTraceService';
 import SkipTraceModal from './SkipTraceModal';
 
@@ -57,20 +57,6 @@ export default function PropertyDetail({ property, onClose, onUpdate }: Property
       onUpdate();
     } catch (error) {
       console.error('Error saving homeowner:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!currentOwner || !confirm('Remove this homeowner?')) return;
-    setIsSaving(true);
-    try {
-      await deleteHomeowner(currentOwner.id);
-      await updateProperty(property.id, { status: 'incomplete' });
-      onUpdate();
-    } catch (error) {
-      console.error('Error deleting homeowner:', error);
     } finally {
       setIsSaving(false);
     }
@@ -139,8 +125,8 @@ export default function PropertyDetail({ property, onClose, onUpdate }: Property
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           <div className="flex items-center gap-2">
             <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${property.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
-                property.status === 'needs_review' ? 'bg-amber-100 text-amber-700' :
-                  'bg-slate-100 text-slate-600'
+              property.status === 'needs_review' ? 'bg-amber-100 text-amber-700' :
+                'bg-slate-100 text-slate-600'
               }`}>
               {property.status.replace('_', ' ').toUpperCase()}
             </span>
@@ -340,15 +326,6 @@ export default function PropertyDetail({ property, onClose, onUpdate }: Property
                   <span className="text-sm text-slate-600">{currentOwner.mailing_address}</span>
                 </div>
               )}
-
-              <button
-                onClick={handleDelete}
-                disabled={isSaving}
-                className="w-full mt-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-xs font-medium flex items-center justify-center gap-1"
-              >
-                <Trash2 size={12} />
-                Remove Owner
-              </button>
             </div>
           ) : (
             <div className="text-center py-6 text-slate-400">
