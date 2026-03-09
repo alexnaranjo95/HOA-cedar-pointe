@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Home, User, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { Search, Home, User, ChevronDown } from 'lucide-react';
 import { PropertyWithOwner } from '../lib/supabase';
 
 interface ParcelGridProps {
@@ -8,25 +8,26 @@ interface ParcelGridProps {
   onPropertyClick: (property: PropertyWithOwner) => void;
 }
 
-function extractStreet(address: string): string {
-  const match = address.match(/SW\s+(\d+(?:st|nd|rd|th)?\s+(?:St|Ter|Ct|Ave|CT|AVE|ST|TER)(?:\s+Rd)?)/i);
-  if (!match) return 'Other';
-  const raw = match[1];
-  const parts = raw.match(/^(\d+)(?:st|nd|rd|th)?\s+(.+)$/i);
-  if (!parts) return 'Other';
-  const num = parts[1];
-  const type = parts[2].trim();
-  const typeMap: Record<string, string> = { ct: 'Ct', ave: 'Ave', st: 'St', ter: 'Ter', 'ave rd': 'Ave' };
-  const normalized = typeMap[type.toLowerCase()] || type;
-  const suffix = num.endsWith('1') && !num.endsWith('11') ? 'st'
-    : num.endsWith('2') && !num.endsWith('12') ? 'nd'
-    : num.endsWith('3') && !num.endsWith('13') ? 'rd' : 'th';
-  return `SW ${num}${suffix} ${normalized}`;
+function getOwnerBundleKey(property: PropertyWithOwner): string {
+  const owners = property.homeowners || [];
+  if (owners.length === 0) return 'No Owner / Incomplete';
+
+  // Create a stable key by sorting owner names
+  return owners
+    .map(h => h.owner_name)
+    .sort()
+    .join(' & ');
 }
 
 function extractHouseNumber(address: string): string {
   const match = address.match(/^(\d+)/);
   return match ? match[1] : '';
+}
+
+function extractStreet(address: string): string {
+  const match = address.match(/SW\s+(\d+(?:st|nd|rd|th)?\s+(?:St|Ter|Ct|Ave|CT|AVE|ST|TER)(?:\s+Rd)?)/i);
+  if (!match) return 'Other';
+  return match[1];
 }
 
 function isClubhouse(address: string): boolean {
@@ -38,22 +39,23 @@ function getStatusColor(property: PropertyWithOwner) {
   const isVerified = property.status === 'verified';
   const isClubhouseProperty = isClubhouse(property.address);
 
-  if (isClubhouseProperty) return { bg: 'bg-purple-50', border: 'border-purple-300', dot: 'bg-purple-600' };
-  if (isVerified) return { bg: 'bg-emerald-50', border: 'border-emerald-300', dot: 'bg-emerald-500' };
-  if (hasOwner) return { bg: 'bg-blue-50', border: 'border-blue-300', dot: 'bg-blue-500' };
-  return { bg: 'bg-slate-50', border: 'border-slate-200', dot: 'bg-slate-300' };
+  if (isClubhouseProperty) return { bg: 'bg-purple-50', border: 'border-purple-300', dot: 'bg-purple-600', text: 'text-purple-700' };
+  if (isVerified) return { bg: 'bg-emerald-50', border: 'border-emerald-300', dot: 'bg-emerald-500', text: 'text-emerald-700' };
+  if (hasOwner) return { bg: 'bg-blue-50', border: 'border-blue-300', dot: 'bg-blue-500', text: 'text-blue-700' };
+  return { bg: 'bg-slate-50', border: 'border-slate-200', dot: 'bg-slate-300', text: 'text-slate-600' };
 }
 
 export default function ParcelGrid({ properties, selectedPropertyId, onPropertyClick }: ParcelGridProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedStreets, setExpandedStreets] = useState<Set<string>>(new Set());
+  const [expandedOwners, setExpandedOwners] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<'all' | 'incomplete' | 'has_owner' | 'verified'>('all');
 
-  const streetGroups = useMemo(() => {
+  const ownerGroups = useMemo(() => {
     const groups: Record<string, PropertyWithOwner[]> = {};
 
     const filtered = properties.filter(p => {
-      const matchesSearch = p.address.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = p.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.homeowners?.some(h => h.owner_name.toLowerCase().includes(searchQuery.toLowerCase())));
       if (!matchesSearch) return false;
 
       if (filterStatus === 'incomplete') return !p.homeowners || p.homeowners.length === 0;
@@ -63,15 +65,16 @@ export default function ParcelGrid({ properties, selectedPropertyId, onPropertyC
     });
 
     filtered.forEach(p => {
-      const street = extractStreet(p.address);
-      if (!groups[street]) groups[street] = [];
-      groups[street].push(p);
+      const key = getOwnerBundleKey(p);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(p);
     });
 
+    // Sort properties within groups by house number
     Object.keys(groups).forEach(key => {
       groups[key].sort((a, b) => {
-        const numA = parseInt(extractHouseNumber(a.address));
-        const numB = parseInt(extractHouseNumber(b.address));
+        const numA = parseInt(extractHouseNumber(a.address)) || 0;
+        const numB = parseInt(extractHouseNumber(b.address)) || 0;
         return numA - numB;
       });
     });
@@ -79,26 +82,32 @@ export default function ParcelGrid({ properties, selectedPropertyId, onPropertyC
     return groups;
   }, [properties, searchQuery, filterStatus]);
 
-  const streetNames = Object.keys(streetGroups).sort();
+  const ownerNames = useMemo(() => {
+    return Object.keys(ownerGroups).sort((a, b) => {
+      if (a === 'No Owner / Incomplete') return 1;
+      if (b === 'No Owner / Incomplete') return -1;
+      return a.localeCompare(b);
+    });
+  }, [ownerGroups]);
 
-  const toggleStreet = (street: string) => {
-    setExpandedStreets(prev => {
+  const toggleOwner = (ownerKey: string) => {
+    setExpandedOwners(prev => {
       const next = new Set(prev);
-      if (next.has(street)) next.delete(street);
-      else next.add(street);
+      if (next.has(ownerKey)) next.delete(ownerKey);
+      else next.add(ownerKey);
       return next;
     });
   };
 
   const expandAll = () => {
-    setExpandedStreets(new Set(streetNames));
+    setExpandedOwners(new Set(ownerNames));
   };
 
   const collapseAll = () => {
-    setExpandedStreets(new Set());
+    setExpandedOwners(new Set());
   };
 
-  const totalFiltered = Object.values(streetGroups).reduce((sum, arr) => sum + arr.length, 0);
+  const totalFiltered = Object.values(ownerGroups).reduce((sum, arr) => sum + arr.length, 0);
   const totalWithOwner = properties.filter(p => p.homeowners && p.homeowners.length > 0).length;
   const totalVerified = properties.filter(p => p.status === 'verified').length;
 
@@ -106,12 +115,8 @@ export default function ParcelGrid({ properties, selectedPropertyId, onPropertyC
     <div className="h-full flex flex-col bg-white">
       <div className="p-4 border-b border-slate-200 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-800">Cedar Pointe Properties</h2>
+          <h2 className="text-lg font-bold text-slate-800">Cedar Pointe Owners</h2>
           <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-purple-600"></span>
-              <span className="font-medium">Clubhouse</span>
-            </span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
               {totalVerified} verified
@@ -133,7 +138,7 @@ export default function ParcelGrid({ properties, selectedPropertyId, onPropertyC
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by address..."
+            placeholder="Search by owner or address..."
             className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
           />
         </div>
@@ -144,11 +149,10 @@ export default function ParcelGrid({ properties, selectedPropertyId, onPropertyC
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
-                className={`px-3 py-1.5 transition-colors capitalize ${
-                  filterStatus === status
-                    ? 'bg-slate-700 text-white'
-                    : 'bg-white text-slate-600 hover:bg-slate-50'
-                }`}
+                className={`px-3 py-1.5 transition-colors capitalize ${filterStatus === status
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
               >
                 {status === 'has_owner' ? 'Has Owner' : status}
               </button>
@@ -160,89 +164,77 @@ export default function ParcelGrid({ properties, selectedPropertyId, onPropertyC
           <button onClick={collapseAll} className="text-xs text-slate-500 hover:text-slate-700">Collapse</button>
         </div>
 
-        <p className="text-xs text-slate-400">{totalFiltered} properties shown</p>
+        <p className="text-xs text-slate-400">{totalFiltered} properties / {ownerNames.length} owner bundles</p>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {streetNames.map(street => {
-          const group = streetGroups[street];
-          const isExpanded = expandedStreets.has(street);
-          const streetOwnerCount = group.filter(p => p.homeowners && p.homeowners.length > 0).length;
+        {ownerNames.map(ownerKey => {
+          const group = ownerGroups[ownerKey];
+          const isExpanded = expandedOwners.has(ownerKey);
+          const isNoOwner = ownerKey === 'No Owner / Incomplete';
 
           return (
-            <div key={street} className="border-b border-slate-100">
+            <div key={ownerKey} className="border-b border-slate-100">
               <button
-                onClick={() => toggleStreet(street)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                onClick={() => toggleOwner(ownerKey)}
+                className={`w-full px-4 py-3 flex flex-col hover:bg-slate-50 transition-colors ${isExpanded ? 'bg-slate-50/50' : ''
+                  }`}
               >
-                <div className="flex items-center gap-3">
-                  <ChevronDown
-                    size={16}
-                    className={`text-slate-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
-                  />
-                  <span className="font-semibold text-sm text-slate-700">{street}</span>
-                  <span className="text-xs text-slate-400">({group.length} homes)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 rounded-full transition-all"
-                      style={{ width: `${group.length > 0 ? (streetOwnerCount / group.length) * 100 : 0}%` }}
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-3">
+                    <ChevronDown
+                      size={16}
+                      className={`text-slate-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
                     />
+                    <div className="flex flex-col items-start">
+                      <span className={`font-bold text-sm ${isNoOwner ? 'text-slate-400 italic' : 'text-slate-800'}`}>
+                        {ownerKey}
+                      </span>
+                      {group.length > 1 && (
+                        <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full mt-0.5">
+                          {group.length} PROPERTIES
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-xs text-slate-400">{streetOwnerCount}/{group.length}</span>
+
+                  {!isNoOwner && (
+                    <div className="flex items-center gap-2">
+                      <User size={14} className="text-slate-400" />
+                    </div>
+                  )}
                 </div>
               </button>
 
               {isExpanded && (
-                <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="px-4 pb-4 pt-1 bg-slate-50 grid grid-cols-1 gap-2">
                   {group.map(property => {
                     const colors = getStatusColor(property);
                     const isSelected = property.id === selectedPropertyId;
-                    const owner = property.homeowners?.[0];
                     const houseNum = extractHouseNumber(property.address);
+                    const street = extractStreet(property.address);
 
                     return (
                       <button
                         key={property.id}
                         onClick={() => onPropertyClick(property)}
-                        className={`relative text-left p-3 rounded-lg border-2 transition-all duration-200 ${
-                          isSelected
-                            ? 'border-amber-400 bg-amber-50 shadow-md ring-2 ring-amber-200'
-                            : `${colors.border} ${colors.bg} hover:shadow-sm hover:border-slate-300`
-                        }`}
+                        className={`relative text-left p-3 rounded-lg border-2 transition-all duration-200 ${isSelected
+                          ? 'border-amber-400 bg-amber-50 shadow-md ring-2 ring-amber-200'
+                          : `${colors.border} ${colors.bg} hover:shadow-sm hover:border-slate-300`
+                          }`}
                       >
-                        {isClubhouse(property.address) ? (
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-bold text-sm text-purple-700">Clubhouse</span>
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`} />
-                          </div>
-                        ) : (
-                          <div className="flex items-start justify-between gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <Home size={12} className="text-slate-400 flex-shrink-0" />
-                              <span className="font-bold text-sm text-slate-800">{houseNum}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-start gap-2">
+                            <Home size={14} className="text-slate-400 mt-0.5" />
+                            <div>
+                              <p className="font-bold text-sm text-slate-800">{houseNum} {street}</p>
+                              {property.parcel_number && (
+                                <p className="text-[10px] text-slate-500 font-mono">Folio: {property.parcel_number}</p>
+                              )}
                             </div>
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${colors.dot}`} />
                           </div>
-                        )}
-
-                        {!isClubhouse(property.address) && (owner ? (
-                          <div className="mt-1.5">
-                            <p className="text-xs text-slate-600 truncate flex items-center gap-1">
-                              <User size={10} className="flex-shrink-0" />
-                              {owner.owner_name}
-                            </p>
-                            {owner.skip_trace_status === 'completed' && (
-                              <CheckCircle size={10} className="text-emerald-500 mt-0.5" />
-                            )}
-                          </div>
-                        ) : (
-                          <p className="mt-1.5 text-xs text-slate-400 flex items-center gap-1">
-                            <AlertCircle size={10} />
-                            No owner
-                          </p>
-                        ))}
+                          <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
+                        </div>
                       </button>
                     );
                   })}
