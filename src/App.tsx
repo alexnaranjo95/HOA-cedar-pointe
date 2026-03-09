@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MapPin, LayoutDashboard, Grid3x3 as Grid3X3, Loader2, Search } from 'lucide-react';
+import { MapPin, LayoutDashboard, Grid3x3 as Grid3X3, Loader2 } from 'lucide-react';
 import PropertyMap from './components/PropertyMap';
 import ParcelGrid from './components/ParcelGrid';
 import PropertyDetail from './components/PropertyDetail';
 import Dashboard from './components/Dashboard';
-import GapAnalysis from './components/GapAnalysis';
 import { PropertyWithOwner } from './lib/supabase';
 import { getAllProperties, fetchParcelGeometry } from './services/propertyService';
 
@@ -13,7 +12,7 @@ export default function App() {
   const [selectedProperty, setSelectedProperty] = useState<PropertyWithOwner | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchingParcels, setFetchingParcels] = useState(false);
-  const [view, setView] = useState<'community' | 'dashboard' | 'gaps'>('community');
+  const [view, setView] = useState<'community' | 'dashboard'>('community');
   const hasFetchedParcels = useRef(false);
 
   const loadProperties = useCallback(async () => {
@@ -80,27 +79,16 @@ export default function App() {
           <div className="flex items-center gap-1 bg-slate-700/50 rounded-lg p-0.5">
             <button
               onClick={() => setView('community')}
-              className={`px-3 py-1.5 rounded-md transition-colors text-sm font-medium flex items-center gap-1.5 ${
-                view === 'community' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-3 py-1.5 rounded-md transition-colors text-sm font-medium flex items-center gap-1.5 ${view === 'community' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
             >
               <Grid3X3 size={15} />
               Community
             </button>
             <button
-              onClick={() => setView('gaps')}
-              className={`px-3 py-1.5 rounded-md transition-colors text-sm font-medium flex items-center gap-1.5 ${
-                view === 'gaps' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Search size={15} />
-              Gap Analysis
-            </button>
-            <button
               onClick={() => setView('dashboard')}
-              className={`px-3 py-1.5 rounded-md transition-colors text-sm font-medium flex items-center gap-1.5 ${
-                view === 'dashboard' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-3 py-1.5 rounded-md transition-colors text-sm font-medium flex items-center gap-1.5 ${view === 'dashboard' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
             >
               <LayoutDashboard size={15} />
               Dashboard
@@ -153,8 +141,6 @@ export default function App() {
               )}
             </div>
           </div>
-        ) : view === 'gaps' ? (
-          <GapAnalysis />
         ) : (
           <div className="h-full overflow-auto p-6">
             <Dashboard onDataUpdate={loadProperties} />
