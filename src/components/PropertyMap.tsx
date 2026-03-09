@@ -79,12 +79,14 @@ export default function PropertyMap({ properties, selectedPropertyId, onProperty
   const onPropertyClickRef = useRef(onPropertyClick);
   onPropertyClickRef.current = onPropertyClick;
 
+  const initialFitDone = useRef(false);
+
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     mapRef.current = L.map(mapContainerRef.current, {
-      center: [25.502, -80.456],
-      zoom: 15,
+      center: [25.498, -80.455],
+      zoom: 17,
       zoomControl: true,
       maxZoom: 20,
       minZoom: 13,
@@ -182,10 +184,11 @@ export default function PropertyMap({ properties, selectedPropertyId, onProperty
       }
     });
 
-    if (allBounds.length > 0 && !selectedPropertyId) {
+    if (allBounds.length > 0 && !selectedPropertyId && !initialFitDone.current) {
       const combinedBounds = allBounds[0];
       allBounds.slice(1).forEach(b => combinedBounds.extend(b));
       mapRef.current.fitBounds(combinedBounds, { padding: [40, 40] });
+      initialFitDone.current = true;
     }
 
     if (selectedPropertyId) {

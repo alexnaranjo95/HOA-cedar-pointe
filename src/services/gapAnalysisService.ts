@@ -5,7 +5,7 @@ import {
   AddressGap,
   AddressSequence,
 } from '../utils/addressParser';
-import { CEDAR_POINTE_ADDRESSES } from '../data/addresses';
+import { CEDAR_POINTE_ADDRESSES, EXCLUDED_ADDRESSES } from '../data/addresses';
 
 export interface GapAnalysisReport {
   totalProperties: number;
@@ -36,7 +36,9 @@ export async function analyzeAddressGaps(): Promise<GapAnalysisReport> {
     const gapsByStreet: GapsByStreetReport[] = [];
 
     for (const sequence of sequences.values()) {
-      const gaps = findAddressGaps(sequence);
+      const gaps = findAddressGaps(sequence).filter(
+        gap => !EXCLUDED_ADDRESSES.some(ex => ex.toLowerCase().includes(gap.fullAddress.toLowerCase()) || gap.fullAddress.toLowerCase().includes(ex.toLowerCase()))
+      );
       allGaps.push(...gaps);
 
       const totalNumbers = sequence.maxNumber - sequence.minNumber + 1;
